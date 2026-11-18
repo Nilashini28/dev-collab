@@ -1,0 +1,614 @@
+generator client {
+  provider = "prisma-client"
+  output = "./generated"
+}
+datasource db {
+  provider = "postgresql"
+}
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+enum DeliveryState {
+  QUEUED
+  PROVIDER_ACCEPTED
+  FAILED
+  CANCELLED
+}
+enum RequestState {
+  PENDING
+  APPROVED
+  REJECTED
+}
+model User {
+  id String @id
+  name String
+  email String @unique
+  emailVerified Boolean @default(false)
+  image String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions Session[]
+  accounts Account[]
+  memberships Membership[]
+  requests JoinRequest[]
+  tasks Task[] @relation("assignee")
+  notifications Notification[]
+  submissionAssignments SubmissionItem[]
+  chatParticipants ConversationParticipant[]
+  messages Message[]
+  readCursors ReadCursor[]
+  @@map("user")
+}
+model Session {
+  id String @id
+  expiresAt DateTime
+  token String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@map("session")
+}
+model Account {
+  id String @id
+  accountId String
+  providerId String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken String?
+  refreshToken String?
+  idToken String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope String?
+  password String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId])
+  @@map("account")
+}
+model Verification {
+  id String @id
+  identifier String
+  value String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([identifier])
+  @@map("verification")
+}
+model Workspace {
+  id String @id @default(uuid())
+  name String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  memberships Membership[]
+  invitations Invitation[]
+  links JoinLink[]
+  audits AuditEvent[]
+  hackathons Hackathon[]
+  conversations Conversation[]
+}
+model Membership {
+  id String @id @default(uuid())
+  workspaceId String
+  userId String
+  role Role @default(MEMBER)
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  @@unique([workspaceId, userId])
+  @@index([userId, active])
+  @@index([workspaceId, active, createdAt, id])
+}
+model Invitation {
+  id String @id @default(uuid())
+  workspaceId String
+  email String
+  role Role
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  acceptedAt DateTime?
+  acceptedBy String?
+  inviterId String
+  version Int @default(1)
+  lastSentAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  deliveries EmailDelivery[]
+  @@index([workspaceId, createdAt, id])
+}
+model JoinLink {
+  id String @id @default(uuid())
+  workspaceId String
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  maxUses Int
+  uses Int @default(0)
+  requiresApproval Boolean @default(false)
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  requests JoinRequest[]
+  @@index([workspaceId, createdAt, id])
+}
+model JoinRequest {
+  id String @id @default(uuid())
+  linkId String
+  userId String
+  state RequestState @default(PENDING)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  link JoinLink @relation(fields: [linkId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  @@unique([linkId, userId])
+}
+model EmailDelivery {
+  id String @id @default(uuid())
+  invitationId String?
+  invitation Invitation? @relation(fields: [invitationId], references: [id])
+  encryptedPayload String?
+  state DeliveryState @default(QUEUED)
+  attempts Int @default(0)
+  providerId String?
+  errorCode String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([state, createdAt])
+}
+model AuditEvent {
+  id String @id @default(uuid())
+  workspaceId String
+  actorId String
+  action String
+  targetId String
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  @@index([workspaceId, createdAt])
+}
+model OutboxEvent {
+  id String @id @default(uuid())
+  type String
+  entityId String
+  createdAt DateTime @default(now())
+  publishedAt DateTime?
+  @@index([publishedAt, createdAt])
+}
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+model Hackathon {
+  startAt DateTime?
+  endAt DateTime?
+  timezone String @default("UTC")
+  format String @default("ONLINE")
+  venue String @default("")
+  participationDetails String @default("")
+  archivedAt DateTime?
+  id String @id @default(uuid())
+  workspaceId String
+  name String
+  description String @default("")
+  officialUrl String?
+  status String @default("ACTIVE")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  project Project?
+  @@index([workspaceId, createdAt, id])
+}
+model Project {
+  description String @default("")
+  repositoryUrl String?
+  demoUrl String?
+  status String @default("IDEA")
+  version Int @default(1)
+  id String @id @default(uuid())
+  hackathonId String @unique
+  name String
+  key String
+  nextTaskNumber Int @default(1)
+  createdAt DateTime @default(now())
+  hackathon Hackathon @relation(fields: [hackathonId], references: [id])
+  tasks Task[]
+  sprints Sprint[]
+  deadline Deadline?
+  proposals DeadlineProposal[]
+  conversations Conversation[]
+  repository RepositoryConnection?
+  folders Folder[]
+  resources Resource[]
+  documents Document[]
+  wikiPages WikiPage[]
+  aiRuns AiRun[]
+  deliverables SubmissionItem[]
+}
+model Task {
+  id String @id @default(uuid())
+  projectId String
+  number Int
+  title String
+  description String @default("")
+  status TaskStatus @default(TODO)
+  priority String @default("MEDIUM")
+  labels String[] @default([])
+  assigneeId String?
+  creatorId String
+  dueAt DateTime?
+  sprintId String?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id])
+  assignee User? @relation("assignee", fields: [assigneeId], references: [id])
+  sprint Sprint? @relation(fields: [sprintId], references: [id])
+  requirement String @default("")
+  requirementWikiId String?
+  autoCompleteOnMerge Boolean @default(false)
+  pullLinks TaskPullLink[]
+  history TaskHistory[]
+  comments TaskComment[]
+  checklist ChecklistItem[]
+  @@unique([projectId, number])
+  @@index([projectId, status, createdAt, id])
+}
+model TaskHistory {
+  id String @id @default(uuid())
+  taskId String
+  actorId String
+  changes Json
+  createdAt DateTime @default(now())
+  task Task @relation(fields: [taskId], references: [id])
+  @@index([taskId, createdAt])
+}
+model TaskComment {
+  id String @id @default(uuid())
+  taskId String
+  actorId String
+  authorName String
+  body String
+  createdAt DateTime @default(now())
+  task Task @relation(fields: [taskId], references: [id])
+  @@index([taskId, createdAt, id])
+}
+model ChecklistItem {
+  id String @id @default(uuid())
+  taskId String
+  title String
+  done Boolean @default(false)
+  version Int @default(1)
+  task Task @relation(fields: [taskId], references: [id])
+}
+model Sprint {
+  id String @id @default(uuid())
+  projectId String
+  name String
+  goal String @default("")
+  startAt DateTime
+  endAt DateTime
+  status SprintStatus @default(PLANNED)
+  version Int @default(1)
+  scopeSnapshot Json?
+  summary Json?
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id])
+  tasks Task[]
+  @@index([projectId, createdAt, id])
+}
+model Deadline {
+  id String @id @default(uuid())
+  projectId String @unique
+  instant DateTime
+  timezone String
+  sourceUrl String?
+  sourceExcerpt String?
+  confirmedBy String
+  version Int @default(1)
+  project Project @relation(fields: [projectId], references: [id])
+  reminders Reminder[]
+}
+model Reminder {
+  id String @id @default(uuid())
+  deadlineId String
+  deadlineVersion Int
+  scheduledAt DateTime
+  offsetHours Int
+  state String @default("SCHEDULED")
+  deadline Deadline @relation(fields: [deadlineId], references: [id])
+  @@unique([deadlineId, deadlineVersion, offsetHours])
+  @@index([state, scheduledAt])
+}
+model Notification {
+  id String @id @default(uuid())
+  userId String
+  workspaceId String
+  title String
+  body String
+  sourceKey String
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+  @@unique([userId, sourceKey])
+  @@index([userId, createdAt, id])
+}
+model DeadlineProposal {
+  id String @id @default(uuid())
+  projectId String
+  sourceUrl String
+  state String @default("QUEUED")
+  excerpt String?
+  candidates String[] @default([])
+  errorCode String?
+  fetchedAt DateTime?
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id])
+  @@index([state, createdAt])
+  @@index([projectId, createdAt])
+}
+model Conversation {
+  id String @id @default(uuid())
+  workspaceId String
+  projectId String?
+  kind String
+  name String
+  scopeKey String @unique
+  nextSequence Int @default(1)
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+  participants ConversationParticipant[]
+  messages Message[]
+  reads ReadCursor[]
+  @@index([workspaceId, createdAt, id])
+}
+model ConversationParticipant {
+  id String @id @default(uuid())
+  conversationId String
+  userId String
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  @@unique([conversationId, userId])
+}
+model Message {
+  id String @id @default(uuid())
+  conversationId String
+  senderId String
+  authorName String
+  clientMessageId String
+  sequence Int
+  body String
+  createdAt DateTime @default(now())
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  sender User @relation(fields: [senderId], references: [id])
+  @@unique([conversationId, senderId, clientMessageId])
+  @@unique([conversationId, sequence])
+}
+model ReadCursor {
+  id String @id @default(uuid())
+  conversationId String
+  userId String
+  sequence Int @default(0)
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  @@unique([conversationId, userId])
+}
+model RepositoryConnection {
+  id String @id @default(uuid())
+  projectId String @unique
+  installationId Int
+  repositoryId Int
+  fullName String
+  url String
+  branch String?
+  state String @default("QUEUED")
+  syncedAt DateTime?
+  errorCode String?
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id])
+  commits GitCommit[]
+  pulls GitPullRequest[]
+}
+model GitCommit {
+  id String @id @default(uuid())
+  connectionId String
+  sha String
+  title String
+  author String
+  url String
+  committedAt DateTime
+  connection RepositoryConnection @relation(fields: [connectionId], references: [id])
+  @@unique([connectionId, sha])
+  @@index([connectionId, committedAt])
+}
+model GitPullRequest {
+  id String @id @default(uuid())
+  connectionId String
+  number Int
+  title String
+  author String
+  state String
+  url String
+  updatedAt DateTime
+  reviewState String @default("UNKNOWN")
+  reviewedAt DateTime?
+  taskLinks TaskPullLink[]
+  connection RepositoryConnection @relation(fields: [connectionId], references: [id])
+  @@unique([connectionId, number])
+}
+model GithubDelivery {
+  id String @id
+  installationId Int?
+  repositoryId Int?
+  event String
+  state String @default("QUEUED")
+  createdAt DateTime @default(now())
+  @@index([state, createdAt])
+}
+model Folder {
+  id String @id @default(uuid())
+  projectId String
+  name String
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id])
+  resources Resource[]
+  @@unique([projectId, name])
+}
+model Resource {
+  id String @id @default(uuid())
+  projectId String
+  folderId String?
+  title String
+  url String?
+  objectKey String?
+  fileName String?
+  contentType String?
+  size Int?
+  checksum String?
+  state String @default("READY")
+  creatorId String
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id])
+  folder Folder? @relation(fields: [folderId], references: [id])
+  document Document?
+  @@index([projectId, createdAt, id])
+}
+model Document {
+  id String @id @default(uuid())
+  projectId String
+  resourceId String? @unique
+  title String
+  state String @default("QUEUED")
+  errorCode String?
+  creatorId String
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id])
+  resource Resource? @relation(fields: [resourceId], references: [id])
+  chunks DocumentChunk[]
+  @@index([projectId, createdAt, id])
+  @@index([state, createdAt])
+}
+model DocumentChunk {
+  id String @id @default(uuid())
+  documentId String
+  section String
+  text String
+  document Document @relation(fields: [documentId], references: [id])
+  @@index([documentId])
+}
+model WikiPage {
+  id String @id @default(uuid())
+  projectId String
+  title String
+  category String @default("General")
+  content String
+  mermaid String @default("")
+  version Int @default(1)
+  authorId String
+  authorName String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id])
+  revisions WikiRevision[]
+  submissionItems SubmissionItem[]
+  @@index([projectId, updatedAt, id])
+}
+model WikiRevision {
+  id String @id @default(uuid())
+  pageId String
+  version Int
+  title String
+  content String
+  mermaid String
+  authorId String
+  authorName String
+  createdAt DateTime @default(now())
+  page WikiPage @relation(fields: [pageId], references: [id])
+  @@unique([pageId, version])
+}
+model AiRun {
+  id String @id @default(uuid())
+  projectId String
+  userId String
+  prompt String
+  documentIds String[]
+  state String @default("QUEUED")
+  result Json?
+  errorCode String?
+  model String
+  contextOptions Json?
+  metrics Json?
+  inputTokens Int?
+  outputTokens Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id])
+  approval AiApproval?
+  @@index([projectId, userId, createdAt, id])
+  @@index([state, createdAt])
+}
+model AiApproval {
+  id String @id @default(uuid())
+  runId String @unique
+  actorId String
+  requestHash String
+  taskIds String[]
+  wikiId String?
+  createdAt DateTime @default(now())
+  run AiRun @relation(fields: [runId], references: [id])
+}
+
+model SubmissionItem {
+  id String @id @default(uuid())
+  projectId String
+  title String
+  kind String @default("CUSTOM")
+  templateKey String?
+  required Boolean @default(true)
+  done Boolean @default(false)
+  ownerId String?
+  url String?
+  wikiPageId String?
+  notes String @default("")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id])
+  owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  wikiPage WikiPage? @relation(fields: [wikiPageId], references: [id], onDelete: SetNull)
+  @@unique([projectId, templateKey])
+  @@index([projectId, createdAt, id])
+}
+
+model TaskPullLink {
+ id String @id @default(uuid())
+ taskId String
+ pullId String?
+ url String
+ number Int
+ title String
+ state String
+ reviewState String @default("UNKNOWN")
+ createdAt DateTime @default(now())
+ task Task @relation(fields:[taskId], references:[id])
+ pull GitPullRequest? @relation(fields:[pullId], references:[id], onDelete:SetNull)
+ @@unique([taskId, url])
+ @@index([pullId])
+}

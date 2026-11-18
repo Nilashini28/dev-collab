@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+const origin='http://localhost:5173';
+const email='smoke-'+crypto.randomUUID().slice(0,8)+'@example.test';
+const password='Local-smoke-password-123!';
+const post=async(path:string,body:unknown)=>fetch(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
+const caps=await (await fetch(origin+'/api/v1/capabilities')).json();assert.equal(caps.data.emailMode,'local-preview');
+const signup=await post('/api/auth/sign-up/email',{name:'Smoke Test',email,password,callbackURL:origin+'/workspaces'});
+assert.equal(signup.status,200,JSON.stringify(await signup.json()));
+const inbox=await post('/api/dev/inbox',{email});assert.equal(inbox.status,200);
+const message=(await inbox.json()).data;assert(message?.url?.startsWith(origin+'/api/auth/verify-email'));
+const verified=await fetch(message.url,{redirect:'manual'});assert.equal(verified.status,302);
+const signin=await post('/api/auth/sign-in/email',{email,password});assert.equal(signin.status,200,JSON.stringify(await signin.json()));
+const cookie=signin.headers.get('set-cookie')?.split(';')[0];assert(cookie);
+const workspace=await fetch(origin+'/api/v1/workspaces',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify({name:'Local smoke workspace'})});
+assert.equal(workspace.status,201,JSON.stringify(await workspace.json()));
+console.log('PASS local signup, test inbox, real email verification, sign-in, authenticated workspace creation');

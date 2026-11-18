@@ -1,0 +1,11 @@
+import { Link } from 'react-router';
+import { ArrowUpRight, LoaderCircle, Users, Check } from 'lucide-react';
+import type { ReactNode } from 'react';
+export function LogoMark(){return <svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="m16 12-11 12 11 12M32 12l11 12-11 12" stroke="#f4f8f5" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/><path d="M28 10 20 38" stroke="#a9e8c5" strokeWidth="3.5" strokeLinecap="round"/><path d="M16 12h8M24 36h8" stroke="#a9e8c5" strokeWidth="2.5" strokeLinecap="round"/><circle cx="28" cy="10" r="3.5" fill="#a9e8c5"/><circle cx="20" cy="38" r="3.5" fill="#a9e8c5"/></svg>}
+export function Brand(){return <Link className="brand" to="/" aria-label="DevCollab home"><span className="brand-mark"><LogoMark/></span>devcollab<span className="brand-dot">.</span></Link>}
+export function Notice({children,error=false}:{children:ReactNode;error?:boolean}){return <div role={error?'alert':'status'} className={'notice '+(error?'error':'')}>{children}</div>}
+export function Loading(){return <div className="loading" role="status"><LoaderCircle className="spin" size={20}/> Loading your workspace…</div>}
+export function Field({label,children}:{label:string;children:ReactNode}){return <label className="field"><span>{label}</span>{children}</label>}
+export function Empty({title,children}:{title:string;children:ReactNode}){return <div className="empty"><span className="empty-icon"><ArrowUpRight/></span><h3>{title}</h3><p>{children}</p></div>}
+
+export function TeamSculpture(){return <div className="team-sculpture" aria-hidden="true"><div className="team-sculpture-shadow"/><div className="team-sculpture-stage"><span className="team-orbit"/><div className="team-tile team-tile-back"><span className="team-mini-avatar"><Users size={26}/></span><i/><i/></div><div className="team-tile team-tile-main"><div className="team-tile-symbol"><Users size={56} strokeWidth={1.5}/></div><span className="team-tile-line"/><span className="team-tile-line short"/><span className="team-connected"><Check size={12}/></span></div><div className="team-tile team-tile-front"><span className="team-member-dot"/><span className="team-member-dot clay"/><span className="team-member-dot paper"/></div><span className="team-sculpture-spark"/></div></div>}
